@@ -35,8 +35,7 @@
 ### [2020~2025 변수 상관관계(코로나 펜데믹 이후)]
 ![image](https://github.com/user-attachments/assets/2bf57bc8-f6ed-460f-b4e9-abf9fd027f7d)
 
->코로나 펜데미 이전과 이후의 변수 상관관계가 역전되는 경우가 보임(CRB)
->
+>코로나 펜데미 이전과 이후의 변수 상관관계가 역전되는 경우가 보임(CRB)<br>
 >펜데믹 이전과 이후의 변수 차이로 테스트 필요!
 
 <hr>
@@ -52,73 +51,13 @@
 ### 학습 기간, 사용 변수에 차이를 두며 테스트 진행
 
 ```
-import seaborn as sns
-import copy
-
 #변수 설정
 features = [
     'USD/KRW', 'Dollar_Index', 'CRB', 'VIX',
     'KOSPI', 'NASDAQ', 'S&P500', 'WTI', 'Gold', 'US10Y'
 ]
-seq_len = 10
-
-#시퀀스 생성 함수
-def create_sequences(data, seq_len=10):
-    X, y = [], []
-    for i in range(seq_len, len(data)):
-        X.append(data[i-seq_len:i])
-        y.append(data[i, 0])
-    return np.array(X), np.array(y)
-
-#모델 학습 함수
-def train_and_evaluate(df_input, model_label, return_model=False):
-    df_model = df_input[features].dropna()
-    scaler = MinMaxScaler()
-    scaled = scaler.fit_transform(df_model)
-
-    X, y = create_sequences(scaled, seq_len)
-    split_idx = int(len(X) * 0.9)
-    X_train, X_val = X[:split_idx], X[split_idx:]
-    y_train, y_val = y[:split_idx], y[split_idx:]
-
-    model = Sequential([
-        LSTM(64, dropout=0.2, input_shape=(X.shape[1], X.shape[2])),
-        Dense(1)
-    ])
-    model.compile(loss='mse', optimizer='adam')
-    early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-
-    model.fit(X_train, y_train,
-              validation_data=(X_val, y_val),
-              epochs=50, batch_size=32,
-              callbacks=[early_stop], verbose=1)
-
-    pred_scaled = model.predict(X_val)
-    usd_idx = features.index('USD/KRW')
-    y_val_rescaled = scaler.inverse_transform(
-        np.concatenate([y_val.reshape(-1, 1), np.zeros((len(y_val), len(features)-1))], axis=1)
-    )[:, usd_idx]
-    pred_rescaled = scaler.inverse_transform(
-        np.concatenate([pred_scaled, np.zeros((len(pred_scaled), len(features)-1))], axis=1)
-    )[:, usd_idx]
-
-    rmse = np.sqrt(mean_squared_error(y_val_rescaled, pred_rescaled))
-    mae = mean_absolute_error(y_val_rescaled, pred_rescaled)
-
-    plt.figure(figsize=(12, 4))
-    plt.plot(y_val_rescaled, label='실제 환율')
-    plt.plot(pred_rescaled, label='예측 환율')
-    plt.title(f'{model_label} (RMSE: {rmse:.2f}, MAE: {mae:.2f})')
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
-    result = {'Model': model_label, 'RMSE': rmse, 'MAE': mae}
-    if return_model:
-        return result, model, X_val, y_val
-    else:
-        return result
-
+```
+```
 #훈련 기간별 테스트 성능 비교
 train_periods = [
     ("2000-01-01", "2009-12-31"),
@@ -130,50 +69,6 @@ test_start, test_end = "2024-01-01", "2024-12-31"
 df_test = df[(df['날짜'] >= test_start) & (df['날짜'] <= test_end)].copy()
 
 multi_period_results = []
-
-for start, end in train_periods:
-    label = f"Train: {start} ~ {end}"
-    df_train = df[(df['날짜'] >= start) & (df['날짜'] <= end)].copy()
-
-    result, model, X_val, y_val = train_and_evaluate(df_train, label, return_model=True)
-
-    df_model = df_test[features].dropna()
-    scaler = MinMaxScaler()
-    scaled = scaler.fit_transform(df_model)
-    X_test, y_test = create_sequences(scaled, seq_len)
-
-    pred_scaled = model.predict(X_test)
-    usd_idx = features.index('USD/KRW')
-    y_test_rescaled = scaler.inverse_transform(
-        np.concatenate([y_test.reshape(-1, 1), np.zeros((len(y_test), len(features)-1))], axis=1)
-    )[:, usd_idx]
-    pred_rescaled = scaler.inverse_transform(
-        np.concatenate([pred_scaled, np.zeros((len(pred_scaled), len(features)-1))], axis=1)
-    )[:, usd_idx]
-
-    rmse = np.sqrt(mean_squared_error(y_test_rescaled, pred_rescaled))
-    mae = mean_absolute_error(y_test_rescaled, pred_rescaled)
-
-    multi_period_results.append({
-        "Train Period": f"{start} ~ {end}",
-        "Test Period": f"{test_start} ~ {test_end}",
-        "RMSE": rmse,
-        "MAE": mae
-    })
-
-# 결과 시각화 및 출력
-result_df = pd.DataFrame(multi_period_results)
-
-plt.figure(figsize=(10, 5))
-sns.barplot(data=result_df, x='Train Period', y='RMSE')
-plt.title("훈련 기간별 테스트 성능 (2024년 기준)")
-plt.ylabel("RMSE")
-plt.xticks(rotation=15)
-plt.tight_layout()
-plt.show()
-
-# 결과 테이블 출력
-print(result_df)
 ```
 
 ![image](https://github.com/user-attachments/assets/db004635-c9f0-4364-90c5-70dbeada57df)
@@ -190,64 +85,6 @@ __최근 데이터로 학습기간을 설정한 모델이 더 좋은 성능을 �
 __중요한 변수만 추출 후 재학습__
 
 ```
-# 변수 목록
-features = [
-    'USD/KRW', 'Dollar_Index', 'CRB', 'VIX',
-    'KOSPI', 'NASDAQ', 'S&P500', 'WTI', 'Gold', 'US10Y'
-]
-seq_len = 10
-
-# 시퀀스 생성 함수
-def create_sequences(data, seq_len=10):
-    X, y = [], []
-    for i in range(seq_len, len(data)):
-        X.append(data[i-seq_len:i])
-        y.append(data[i, 0])
-    return np.array(X), np.array(y)
-
-# 모델 학습 함수
-def train_and_evaluate(df_input, model_label, return_model=False):
-    df_model = df_input[features].dropna()
-    scaler = MinMaxScaler()
-    scaled = scaler.fit_transform(df_model)
-    X, y = create_sequences(scaled, seq_len)
-    split_idx = int(len(X) * 0.9)
-    X_train, X_val = X[:split_idx], X[split_idx:]
-    y_train, y_val = y[:split_idx], y[split_idx:]
-
-    model = Sequential([
-        LSTM(64, dropout=0.2, input_shape=(X.shape[1], X.shape[2])),
-        Dense(1)
-    ])
-    model.compile(loss='mse', optimizer='adam')
-    early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-
-    model.fit(X_train, y_train, validation_data=(X_val, y_val),
-              epochs=50, batch_size=32, callbacks=[early_stop], verbose=1)
-
-    pred_scaled = model.predict(X_val)
-    usd_idx = features.index('USD/KRW')
-    y_val_rescaled = scaler.inverse_transform(
-        np.concatenate([y_val.reshape(-1, 1), np.zeros((len(y_val), len(features)-1))], axis=1)
-    )[:, usd_idx]
-    pred_rescaled = scaler.inverse_transform(
-        np.concatenate([pred_scaled, np.zeros((len(pred_scaled), len(features)-1))], axis=1)
-    )[:, usd_idx]
-
-    rmse = np.sqrt(mean_squared_error(y_val_rescaled, pred_rescaled))
-    mae = mean_absolute_error(y_val_rescaled, pred_rescaled)
-
-    result = {'Model': model_label, 'RMSE': rmse, 'MAE': mae}
-    if return_model:
-        return result, model, X_val, y_val
-    else:
-        return result
-# 2022~2023 데이터셋
-df_train_recent = df[(df['날짜'] >= "2022-01-01") & (df['날짜'] <= "2023-12-31")].copy()
-
-# 모델 학습
-results_recent, model_recent, X_val_recent, y_val_recent = train_and_evaluate(df_train_recent, '2022~2023 변수 분석용 모델', return_model=True)
-
 # baseline RMSE 계산
 baseline_pred = model_recent.predict(X_val_recent)
 baseline_rmse = np.sqrt(mean_squared_error(y_val_recent, baseline_pred))
@@ -263,15 +100,6 @@ def permutation_importance(model, X_val, y_val, features, baseline_rmse):
         delta = rmse - baseline_rmse
         importances.append(delta)
     return pd.DataFrame({'Feature': features, 'ΔRMSE': importances}).sort_values(by='ΔRMSE', ascending=False)
-
-# 중요도 분석 실행
-importance_df = permutation_importance(model_recent, X_val_recent, y_val_recent, features, baseline_rmse)
-plt.figure(figsize=(10, 5))
-sns.barplot(data=importance_df, x='ΔRMSE', y='Feature', palette='viridis')
-plt.title("2022~2023 훈련 모델의 변수 중요도 (ΔRMSE 기준)")
-plt.tight_layout()
-plt.show()
-print(importance_df)
 ```
 
 ![image](https://github.com/user-attachments/assets/f1748849-0584-47ce-9d05-c1cf3b43405f)
@@ -281,70 +109,8 @@ __Dollar_Index, NASDAQ, US10Y, Gold에서 높은 연관성을 보임__
 ### 상위 4개의 변수로 재학습__
 
 ```
-#사용 변수 설정
+#사용 변수(상위 4개)
 top_features = ['USD/KRW', 'Dollar_Index', 'NASDAQ', 'US10Y', 'Gold']
-seq_len = 10
-
-#시퀀스 생성 함수 (수정된 features 사용)
-def create_sequences_lite(data, seq_len=10):
-    X, y = [], []
-    for i in range(seq_len, len(data)):
-        X.append(data[i-seq_len:i])
-        y.append(data[i, 0])  # 항상 첫 번째가 타겟
-    return np.array(X), np.array(y)
-
-#모델 학습 함수 (상위 변수용)
-def train_lite_model(df_input, model_label):
-    df_model = df_input[top_features].dropna()
-    scaler = MinMaxScaler()
-    scaled = scaler.fit_transform(df_model)
-
-    X, y = create_sequences_lite(scaled, seq_len)
-    split_idx = int(len(X) * 0.9)
-    X_train, X_val = X[:split_idx], X[split_idx:]
-    y_train, y_val = y[:split_idx], y[split_idx:]
-
-    model = Sequential([
-        LSTM(64, dropout=0.2, input_shape=(X.shape[1], X.shape[2])),
-        Dense(1)
-    ])
-    model.compile(loss='mse', optimizer='adam')
-    early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-
-    model.fit(X_train, y_train, validation_data=(X_val, y_val),
-              epochs=50, batch_size=32, callbacks=[early_stop], verbose=1)
-
-    # 예측
-    pred_scaled = model.predict(X_val)
-    usd_idx = top_features.index('USD/KRW')
-    y_val_rescaled = scaler.inverse_transform(
-        np.concatenate([y_val.reshape(-1, 1), np.zeros((len(y_val), len(top_features)-1))], axis=1)
-    )[:, usd_idx]
-    pred_rescaled = scaler.inverse_transform(
-        np.concatenate([pred_scaled, np.zeros((len(pred_scaled), len(top_features)-1))], axis=1)
-    )[:, usd_idx]
-
-    # 평가
-    rmse = np.sqrt(mean_squared_error(y_val_rescaled, pred_rescaled))
-    mae = mean_absolute_error(y_val_rescaled, pred_rescaled)
-
-    # 결과 시각화
-    plt.figure(figsize=(12, 4))
-    plt.plot(y_val_rescaled, label='실제 환율')
-    plt.plot(pred_rescaled, label='예측 환율')
-    plt.title(f'{model_label} (RMSE: {rmse:.2f}, MAE: {mae:.2f})')
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
-    return {'Model': model_label, 'RMSE': rmse, 'MAE': mae}
-
-#2022~2023 데이터 추출
-df_lite = df[(df['날짜'] >= "2022-01-01") & (df['날짜'] <= "2023-12-31")].copy()
-
-#학습 및 평가 실행
-lite_results = train_lite_model(df_lite, '상위 변수 5개 모델 (2022~2023)')
-print(lite_results)
 ```
 
 ![image](https://github.com/user-attachments/assets/2456c2fe-f958-4d82-9a2d-635526345f84)
@@ -352,3 +118,169 @@ print(lite_results)
 ### LSTM 최종 성능 지표
 
 ![image](https://github.com/user-attachments/assets/d70a4248-031a-4d51-8460-b5d58dd1c2db)
+
+<hr>
+
+## LSTM 이외의 시계열 모델
+
+__GRU모델과 최근 시계열 예측에서 주목받는 비딥러닝 기반 모델인<br> DLinear모델과의 비교 테스트를 통해 환율 예측에서의 모델 적합성을 판단__
+
+### DLinear
+- 비딥러닝 기반의 경량 모델
+- 간단한 linear layer를 사용하여 __추세(trend)와 계절성(seasonal)__ 성분으로 분해, 선형적으로 예측
+
+### GRU
+- RNN의 일종, 시계열 데이터의 __시간적 패턴__ 을 기억하고 예측
+- 시퀀스 전체를 GRU 셀에 넣어 각 시점에 대한 hidden state를 얻음
+
+<hr>
+
+## 모델 테스트 & 비교
+
+### Best Parameter
+
+- Optuna 함수 사용, best 파라미터 도출
+- 하이퍼파라미터 샘플링
+```
+seq_len = trial.suggest_int("seq_len", 24, 96, step=12)
+pred_len = trial.suggest_int("pred_len", 5, 20)
+lr = trial.suggest_loguniform("lr", 1e-4, 1e-2)
+batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
+```
+```
+Best Params: {'seq_len': 96, 'pred_len': 5, 'lr': 0.00020605303810428396, 'batch_size': 16}
+```
+
+### 공통 조건
+- 공통변수 : 환율데이터(USD/KRW)
+- 입력 기간 : 96, 예측 기간 : 1, 5, 10
+- 학습 데이터 80% / 검증 데이터 20%
+- 평가 : RMSE, MAE
+- 슬라이딩 윈도우 예측으로 반복 평가
+
+#### sliding_predict
+```
+def sliding_predict(model, test_data, scaler, seq_len, pred_len, target_idx):
+  model.eval()
+  true_all, pred_all = [], []
+  with torch.no_grad():
+    for i in range(0, len(test_data) - seq_len - pred_len + 1):
+      x = test_data[i:i+seq_len].reshape(1, seq_len, input_dim)
+      y = test_data[i+seq_len:i+seq_len+pred_len, target_idx].reshape(pred_len, 1)
+
+      x_tensor = torch.tensor(x, dtype=torch.float32)
+      pred_tensor = model(x_tensor).squeeze(0).numpy()
+      y_true = scaler.inverse_transform(
+        np.pad(np.zeros((pred_len, input_dim)), ((0,0),(0,0)), constant_values=0)
+      )
+      y_pred = scaler.inverse_transform(
+        np.pad(np.zeros((pred_len, input_dim)), ((0,0),(0,0)), constant_values=0)
+      )
+      y_true[:, target_idx] = y.squeeze()
+      y_pred[:, target_idx] = pred_tensor.squeeze()
+
+      true_all.extend(y_true[:, target_idx])
+      pred_all.extend(y_pred[:, target_idx])
+
+  rmse = mean_squared_error(true_all, pred_all) ** 0.5
+  mae = mean_absolute_error(true_all, pred_all)
+  return true_all, pred_all, rmse, mae
+```
+
+### 모델별로 같은 조건으로 예측 기간, 사용 변수를 변경해가며 테스트
+- 예측 기간 : 1, 5, 10
+- 변수 :
+   - 단변량(USD/KRW 환율 단독)
+   - 다변량(환율, 달러지수, NASDAQ, US10Y, 금)
+ 
+```
+#파라미터
+seq_len = 96
+pred_len = 예측 기간 조정
+input_dim = len(columns)
+target_idx = 0  # 'USD/KRW'
+train_size = int(len(scaled_df) * 0.8)
+lr = 0.001
+batch_size = 16
+epochs = 20
+```
+```
+#모델 정의
+class DLinear(nn.Module):
+    def __init__(self, seq_len, pred_len, input_dim):
+        super(DLinear, self).__init__()
+        self.linear_s = nn.Linear(seq_len, pred_len)
+        self.linear_t = nn.Linear(seq_len, pred_len)
+        self.input_dim = input_dim
+
+    def forward(self, x):
+        seq_last = x[:, -1:, :].detach()
+        x = x - seq_last
+        trend = torch.mean(x, dim=1, keepdim=True).expand_as(x)
+        seasonal = x - trend
+        s_out = self.linear_s(seasonal.permute(0, 2, 1))
+        t_out = self.linear_t(trend.permute(0, 2, 1))
+        output = s_out + t_out + seq_last.permute(0, 2, 1)
+        return output[:, 0, :].unsqueeze(-1)
+
+class LSTMModel(nn.Module):
+    def __init__(self, pred_len, input_dim, hidden_size=64):
+        super(LSTMModel, self).__init__()
+        self.lstm = nn.LSTM(input_dim, hidden_size, batch_first=True)
+        self.linear = nn.Linear(hidden_size, pred_len)
+    def forward(self, x):
+        out, _ = self.lstm(x)
+        out = out[:, -1, :]
+        out = self.linear(out)
+        return out.unsqueeze(-1)
+
+class GRUModel(nn.Module):
+    def __init__(self, pred_len, input_dim, hidden_size=64):
+        super(GRUModel, self).__init__()
+        self.gru = nn.GRU(input_dim, hidden_size, batch_first=True)
+        self.linear = nn.Linear(hidden_size, pred_len)
+    def forward(self, x):
+        out, _ = self.gru(x)
+        out = self.linear(out[:, -1, :])
+        return out.unsqueeze(-1)
+```
+
+![image](https://github.com/user-attachments/assets/ffb76fbe-cc7c-42f2-bbbd-46250d85d895)
+
+### 최종 모델 테스트 결과
+![image](https://github.com/user-attachments/assets/b889e65c-1bdb-4f1a-9485-e53f10d60e58)
+
+### 결과 요약
+- __예측일에 따른 경향__
+   - 1일 예측 : GRU 모델이 단변량•다변량 모두에서 가장 우수, 빠른 반응성 학습에 강함
+   - 5,10일 예측 :DLinear가 단/다변량 모두 안정적 → 중기 트렌드 반영에 강점
+
+- __입력 방식에 따른 경향__
+   - 단변량 입력 : 대체로 더 낮은 RMSE/MAE, 불필요한 변수 없이 학습 집중 가능
+   - 다변량 입력 : 일부 모델(LSTM, GRU)의 경우 오히려 성능 저하 경향 보임 → 과적합 가능성?, 입력 차원 저하
+
+- __모델별 특성 정리__
+   - LSTM : 시계열 구조에 적합하지만 과적합 경향 있음
+   - GRU : 짧은 시계열 예측에 가장 효율적, 빠른 수렴, 예측 기간 증가 시 성능 흔들림
+   - DLinear : 단/다변량 상관없이 안정적, 장기 예측에 특히 강함, 복잡한 시계열에서는 적합하지 않을 것으로 보임
+
+## 수집 데이터 .csv
+
+[최종 병합 데이터](https://drive.google.com/file/d/1eDzd9QgtyD1pLJvPjnybaofBXrVC8RAV/view?usp=sharing)
+
+## 최종 보고서 .pptx
+
+[환율 예측 최종](https://drive.google.com/file/d/1IPi-5Jqd2lS8LKSVhVOpTy0ylRK5D1np/view?usp=sharing)
+
+## 참고 문헌
+
+딥러닝을 활용한 원화 환율 예측: 시장 및 웹데이터와 거시경제 지표의 활용<https://koasas.kaist.ac.kr/handle/10203/285143><br>
+대용량 거시･금융 자료를 이용한 원/달러 환율 변동의 예측력 평가<https://www.smu.ac.kr/_attach/file/2022/07/MoOhsWhoeftIsdRypDKc.pdf><br>
+Are Transformers Effective for Time Series Forecasting?<https://arxiv.org/pdf/2205.13504v2><br>
+1차 프로젝트 - 데이터분석_경제지표를 통한 환율 예측 모델 생성<https://github.com/ganjjiang/first_project>
+
+## 데이터 출처
+
+한국은행 경제 통계 시스템 http://ecos.bok.or.kr <br>
+실시간 환율 데이터,실시간 환율 데이터 Investing.com<br>
+금융 데이터 Yahoo Finance<br>
